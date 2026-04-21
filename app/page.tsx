@@ -1,65 +1,193 @@
-import Image from "next/image";
+'use client'
 
-export default function Home() {
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
+
+export default function WelcomePage() {
+  const router = useRouter()
+
+  const [tab, setTab] = useState<'create' | 'join'>('create')
+
+  // Create trip
+  const [tripName, setTripName] = useState('')
+  const [startsAt, setStartsAt] = useState('')
+  const [endsAt, setEndsAt] = useState('')
+  const [creating, setCreating] = useState(false)
+
+  // Join trip
+  const [joinCode, setJoinCode] = useState('')
+  const [joining, setJoining] = useState(false)
+
+  async function handleCreate() {
+    if (!tripName.trim()) return
+    setCreating(true)
+    try {
+      const payload: Record<string, string> = { name: tripName.trim(), code: '' }
+      if (startsAt) payload.starts_at = startsAt
+      if (endsAt)   payload.ends_at   = endsAt
+
+      const { data, error } = await supabase
+        .from('trips')
+        .insert(payload)
+        .select('code')
+        .single()
+
+      if (error) throw error
+      router.push(`/trip/${data.code}`)
+    } catch (e) {
+      console.error(e)
+      alert('สร้างทริปไม่สำเร็จ กรุณาลองใหม่')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  async function handleJoin() {
+    const code = joinCode.trim().toUpperCase()
+    if (code.length !== 6) return
+    setJoining(true)
+    try {
+      const { data, error } = await supabase
+        .from('trips')
+        .select('id')
+        .eq('code', code)
+        .single()
+
+      if (error || !data) {
+        alert('ไม่พบรหัสทริปนี้ กรุณาตรวจสอบอีกครั้ง')
+        return
+      }
+      router.push(`/trip/${code}`)
+    } catch {
+      alert('เกิดข้อผิดพลาด กรุณาลองใหม่')
+    } finally {
+      setJoining(false)
+    }
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <div className="page-wrapper" style={{
+      display: 'flex', flexDirection: 'column', justifyContent: 'center',
+      minHeight: '100vh', paddingTop: '2rem', paddingBottom: '2rem',
+    }}>
+      {/* Logo */}
+      <div className="fade-up" style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: 72, height: 72, borderRadius: '1.5rem',
+          background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+          marginBottom: '1rem', fontSize: '2rem',
+          boxShadow: '0 8px 32px rgba(99,102,241,0.35)',
+        }}>✈️</div>
+        <h1 style={{
+          fontSize: '2rem', fontWeight: 700,
+          background: 'linear-gradient(135deg, #a5b4fc, #c4b5fd)',
+          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+        }}>
+          TripSplit
+        </h1>
+        <p style={{ color: 'var(--muted)', marginTop: '0.4rem', fontSize: '0.95rem' }}>
+          แบ่งค่าใช้จ่ายทริปกับเพื่อน โปร่งใส ไม่มั่ว
+        </p>
+      </div>
+
+      {/* Tabs */}
+      <div className="card fade-up" style={{ animationDelay: '0.05s' }}>
+        <div style={{
+          display: 'grid', gridTemplateColumns: '1fr 1fr',
+          background: 'var(--surface2)', borderRadius: '0.875rem',
+          padding: '4px', marginBottom: '1.5rem',
+        }}>
+          {(['create', 'join'] as const).map(t => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              style={{
+                background: tab === t ? 'var(--surface)' : 'transparent',
+                border: 'none', borderRadius: '0.75rem', padding: '0.6rem',
+                color: tab === t ? 'var(--text)' : 'var(--muted)',
+                fontWeight: tab === t ? 600 : 400, fontSize: '0.9rem',
+                transition: 'all 0.2s',
+              }}
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+              {t === 'create' ? '🗺️ สร้างทริป' : '🔑 เข้าร่วมทริป'}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'create' ? (
+          <div className="fade-up">
+            <div className="field">
+              <label className="label">ชื่อทริป</label>
+              <input
+                id="trip-name-input"
+                placeholder="เช่น ทริปเกาะสมุย 2025"
+                value={tripName}
+                onChange={e => setTripName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleCreate()}
+              />
+            </div>
+            <div className="field-row">
+              <div className="field">
+                <label className="label">วันเริ่มต้น</label>
+                <input
+                  id="trip-starts-input"
+                  type="date"
+                  value={startsAt}
+                  onChange={e => setStartsAt(e.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label className="label">วันสิ้นสุด</label>
+                <input
+                  id="trip-ends-input"
+                  type="date"
+                  value={endsAt}
+                  onChange={e => setEndsAt(e.target.value)}
+                />
+              </div>
+            </div>
+            <button
+              id="create-trip-btn"
+              className="btn-primary"
+              style={{ width: '100%' }}
+              onClick={handleCreate}
+              disabled={creating || !tripName.trim()}
             >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+              {creating ? 'กำลังสร้าง...' : 'สร้างทริปใหม่ 🚀'}
+            </button>
+          </div>
+        ) : (
+          <div className="fade-up">
+            <div className="field">
+              <label className="label">รหัสทริป 6 หลัก</label>
+              <input
+                id="join-code-input"
+                placeholder="เช่น AB12CD"
+                value={joinCode}
+                onChange={e => setJoinCode(e.target.value.toUpperCase())}
+                maxLength={6}
+                onKeyDown={e => e.key === 'Enter' && handleJoin()}
+                style={{ textTransform: 'uppercase', letterSpacing: '0.2em', fontSize: '1.2rem', textAlign: 'center' }}
+              />
+            </div>
+            <button
+              id="join-trip-btn"
+              className="btn-primary"
+              style={{ width: '100%' }}
+              onClick={handleJoin}
+              disabled={joining || joinCode.trim().length !== 6}
+            >
+              {joining ? 'กำลังเข้าร่วม...' : 'เข้าร่วมทริป →'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      <p style={{ textAlign: 'center', color: 'var(--muted)', fontSize: '0.8rem', marginTop: '1.5rem' }}>
+        ไม่ต้องสมัครสมาชิก · ใช้ได้ทันที
+      </p>
     </div>
-  );
+  )
 }
